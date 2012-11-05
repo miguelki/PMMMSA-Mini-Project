@@ -50,12 +50,12 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>opencv_core242d.lib;opencv_imgproc242d.lib;opencv_highgui242d.lib;opencv_ml242d.lib;opencv_video242d.lib;opencv_features2d242d.lib;opencv_calib3d242d.lib;opencv_objdetect242d.lib;opencv_contrib242d.lib;opencv_legacy242d.lib;opencv_flann242d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opencv_core242d.lib;opencv_imgproc242d.lib;opencv_highgui242d.lib;opencv_ml242d.lib;opencv_video242d.lib;opencv_features2d242d.lib;opencv_calib3d242d.lib;opencv_objdetect242d.lib;opencv_contrib242d.lib;Ws2_32.lib;winmm.lib;opencv_legacy242d.lib;opencv_flann242d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -78,10 +78,26 @@
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="IpEndpointName.h" />
+    <ClInclude Include="MessageMappingOscPacketListener.h" />
+    <ClInclude Include="NetworkingUtils.h" />
+    <ClInclude Include="OscException.h" />
+    <ClInclude Include="OscOutboundPacketStream.h" />
+    <ClInclude Include="OscTypes.h" />
+    <ClInclude Include="PacketListener.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="TimerListener.h" />
+    <ClInclude Include="UdpSocket.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ip\IpEndpointName.cpp" />
+    <ClCompile Include="ip\NetworkingUtils.cpp" />
+    <ClCompile Include="ip\UdpSocket.cpp" />
+    <ClCompile Include="osc\OscOutboundPacketStream.cpp" />
+    <ClCompile Include="osc\OscPrintReceivedElements.cpp" />
+    <ClCompile Include="osc\OscReceivedElements.cpp" />
+    <ClCompile Include="osc\OscTypes.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>

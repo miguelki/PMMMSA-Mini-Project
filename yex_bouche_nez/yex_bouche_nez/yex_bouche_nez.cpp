@@ -4,6 +4,11 @@
 
 #define NB_CLSF 3 // number of classifiers
 
+// OSC stuff
+#define ADDRESS "127.0.0.1"
+#define PORT 7000
+#define OUTPUT_BUFFER_SIZE 1024
+
 // Create memory for calculations
 CvMemStorage* storages[NB_CLSF] = {0, 0, 0};
 
@@ -14,8 +19,10 @@ CvHaarClassifierCascade* cascade[NB_CLSF] = {0, 0, 0};
 CvScalar colors[NB_CLSF] = {CV_RGB(255, 0, 0), CV_RGB(0, 255, 0), CV_RGB(255, 255, 0)};
 
 // Function prototype for detecting and drawing an object from an image
-//bool detect_and_draw(IplImage* img, CvHaarClassifierCascade* cascade, CvScalar color, CvMemStorage* storage);
-std::vector<std::string> detect_and_draw(IplImage* img);
+std::vector<int> detect_and_draw(IplImage* img);
+
+// sound processing function
+std::vector<float> process_values(std::vector<int> prev_a, std::vector<int> new_a);
 
 // Create a std::string that contains the cascade name
 const char *cascade_name[NB_CLSF]={"haar/face.xml", "haar/haarcascade_eye.xml", "haar/mouth.xml" };
@@ -24,6 +31,16 @@ using namespace std;
 
 //Point d'entrée du programme
 int main (int argc, char * const argv[]) {
+	// OSC variables for data transmission to pure data
+	UdpTransmitSocket transmitSocket( IpEndpointName( ADDRESS, PORT ) );
+
+	char buffer[OUTPUT_BUFFER_SIZE];
+	osc::OutboundPacketStream p( buffer, OUTPUT_BUFFER_SIZE );
+
+	// Structure containing the previous areas
+	std::vector<int> prev_a;
+	prev_a.clear();
+
 	// Structure for getting video from camera or avi
 	CvCapture* capture = 0;
 	int key = 'a';
@@ -45,7 +62,6 @@ int main (int argc, char * const argv[]) {
 
 	// If loaded succesfully, then:
 	if( capture ) {
-
 		for(int i=0;i<NB_CLSF;i++) {
 			cascade[i] = (CvHaarClassifierCascade*)cvLoad(cascade_name[i], 0, 0, 0 );
 
@@ -81,15 +97,32 @@ int main (int argc, char * const argv[]) {
 			else
 				cvFlip( frame, frame_copy, 0 );
 
-			/*for(int i=0;i<NB_CLSF;i++) {
-			// Call the function to detect and draw the face
-			detect_and_draw(frame_copy,cascade[i], colors[i], storages[i]);	
+			// vecteur avec toutes les valeurs 
+			std::vector<int> res = detect_and_draw(frame_copy);
+
+
+			if (!(prev_a.empty())) {
+				std::vector<float> values = process_values(prev_a, res);
+							for (unsigned int v = 0; v < res.size(); v++)
+				cout << res[v] << " ";
+			cout << "\nOutput values : " << endl;
+			for (unsigned int v = 0; v < values.size(); v++)
+			cout << values[v] << " ";
+			cout << "\n-------" << endl;
+			// transmit values to pure data
+
+				p.Clear();
+				std::ostringstream tmp;
+				tmp <<values[1] << values[2];
+
+				p<< osc::BeginMessage("/test1") << tmp.str().c_str() <<osc::EndMessage;
+
+				transmitSocket.Send( p.Data(), p.Size() );
+
+				p.Clear();
 			}
-			*/
-			std::vector<std::string> res = detect_and_draw(frame_copy);
-			for (int v = 0; v < res.size(); v++)
-				cout << res[v] << endl;
-			cout << "-------" << endl;
+
+			prev_a = res;
 
 			// Wait for a while before proceeding to the next frame
 			if( cvWaitKey( 1 ) >= 0 )
@@ -102,71 +135,19 @@ int main (int argc, char * const argv[]) {
 		cvReleaseHaarClassifierCascade(&(cascade[i]));
 		cvReleaseMemStorage(&storages[i]);
 	}
+
 	cvReleaseImage( &frame_copy );
 	cvReleaseCapture( &capture );
 
-	// If the capture is not loaded succesfully, then:
 	return 0;
-
 }
 
-// Function to detect and draw any faces that is present in an image
-//bool detect_and_draw( IplImage* img,CvHaarClassifierCascade* cascade, CvScalar color, CvMemStorage* storage)
-//{
-//	int scale = 1;
-//
-//	// Create a new image based on the input image
-//	IplImage* temp = cvCreateImage( cvSize(img->width/scale,img->height/scale), 8, 3 );
-//
-//	// Create two points to represent the face locations
-//	CvPoint pt1, pt2;
-//	int i;
-//
-//	// Clear the memory storage which was used before
-//	cvClearMemStorage( storage );
-//
-//	// Find whether the cascade is loaded, to find the faces. If yes, then:
-//	if( cascade )
-//	{
-//		// There can be more than one face in an image. So create a growable sequence of faces.
-//		// Detect the objects and store them in the sequence
-//		CvSeq* faces = cvHaarDetectObjects( img, cascade, storage,
-//			1.1, 30, CV_HAAR_DO_CANNY_PRUNING,
-//			cvSize(50, 50),cvSize(400,400) );
-//
-//		// Loop the number of faces found.
-//		for( i = 0; i < (faces ? faces->total : 0); i++ ) {
-//			// Create a new rectangle for drawing the face
-//			CvRect* r = (CvRect*)cvGetSeqElem( faces, i );
-//
-//			// Find the dimensions of the face,and scale it if necessary
-//			pt1.x = r->x*scale;
-//			pt2.x = (r->x+r->width)*scale;
-//			pt1.y = r->y*scale;
-//			pt2.y = (r->y+r->height)*scale;
-//
-//			// Draw the rectangle in the input image
-//			cvRectangle( img, pt1, pt2, color, 3, 8, 0 );
-//		}
-//	}
-//
-//	// Show the image in the window named "result"
-//	cvShowImage( "result", img );
-//
-//	// Release the temp image created.
-//	cvReleaseImage( &temp );
-//
-//	if(i > 0)
-//		return 1;
-//	else
-//		return 0;
-//}
+std::vector<int> detect_and_draw(IplImage* img) {
+	std::vector<int> feat_areas;
+	feat_areas.clear();
 
-std::vector<std::string> detect_and_draw(IplImage* img) {
-	std::vector<std::string> feat_nb;
-	std::vector<std::string> feat_areas;
-	feat_nb.clear();
-
+	int eye_area = 0;
+	int mth_area = 0;
 	int scale = 1;
 
 	// Create a new image based on the input image
@@ -187,7 +168,7 @@ std::vector<std::string> detect_and_draw(IplImage* img) {
 		// Loop the number of faces found.
 		if (faces->total == 0) {
 			cvShowImage( "result", img );
-			return feat_nb;
+			return feat_areas;
 		} else {
 			/* get the first detected face */
 			CvRect *face = (CvRect*)cvGetSeqElem(faces, 0);
@@ -197,12 +178,6 @@ std::vector<std::string> detect_and_draw(IplImage* img) {
 				cvPoint(face->x, face->y),
 				cvPoint(face->x + face->width,face->y + face->height),
 				colors[0], 1, 8, 0);	
-
-			/** Add face rectangle area into std::vector **/
-			ostringstream f_a;
-			f_a << face->width*face->height;
-			feat_nb.push_back(std::string("1"));
-			feat_areas.push_back(f_a.str());
 
 			/* reset buffer for the next object detection */
 			cvClearMemStorage(storages[1]);
@@ -227,11 +202,6 @@ std::vector<std::string> detect_and_draw(IplImage* img) {
 				cvSize(20, 20), cvSize(60, 60)  /* minimum detection scale */
 				);
 
-			/** Add number of eyes detected into std::vector **/
-			ostringstream e_nb;
-			e_nb << eyes->total;
-			feat_nb.push_back(e_nb.str());
-
 			/* draw a rectangle for each detected eye */
 			for( int e = 0; e < (eyes ? eyes->total : 0); e++ ) {
 				/* get one eye */
@@ -245,11 +215,12 @@ std::vector<std::string> detect_and_draw(IplImage* img) {
 					1, 8, 0
 					);
 
-				/** Add eye rectangle area detected into std::vector **/
-				ostringstream e_a;
-				e_a << eye->height*eye->width;
-				feat_areas.push_back(e_a.str());
+				eye_area += (eye->height*eye->width);
 			}
+			/** Compute eye rectangle area : mean of sum of all eye areas **/
+			if (eyes->total == 0)
+				eyes->total = 1;
+			feat_areas.push_back((int) eye_area / eyes->total);
 
 			/* reset buffer for the next object detection */
 			cvClearMemStorage(storages[2]);
@@ -291,15 +262,11 @@ std::vector<std::string> detect_and_draw(IplImage* img) {
 					1, 8, 0
 					);
 
-				/** Add mouth rectangle area detected into std::vector **/
-				ostringstream m_a;
-				m_a << mouth->height*mouth->width;
-				feat_nb.push_back(std::string("1"));
-				feat_areas.push_back(m_a.str());
+				/** Compute mouth rectangle area**/
+				mth_area = (int) mouth->width * mouth->height;
+			} 
 
-			} else {
-				feat_nb.push_back(std::string("0"));
-			}
+			feat_areas.push_back(mth_area);
 			/* reset region of interest */
 			cvResetImageROI(img);
 		}
@@ -311,9 +278,23 @@ std::vector<std::string> detect_and_draw(IplImage* img) {
 	// Release temp image created.
 	cvReleaseImage( &temp );
 
-	feat_areas.insert(feat_areas.begin(), feat_nb.begin(), feat_nb.end());
-
 	return feat_areas;
 }
 
+std::vector<float> process_values(std::vector<int> prev_a, std::vector<int> new_a) {
 
+	std::vector<float> res;
+	res.clear();
+	float tmp = 0;
+	
+	// mouth value : mapped into [0, 1] to change volume
+	tmp = prev_a[1] / new_a[1];
+	tmp > 1 ? tmp-- : res.push_back(tmp);
+	tmp = 0;
+
+	// eyes value : mapped into [0; 3000] to change frequency 
+		tmp = prev_a[0] / new_a[0];
+	tmp > 1 ? --tmp*3000 : res.push_back(tmp*3000);
+
+	return res;
+}
