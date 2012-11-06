@@ -1,6 +1,10 @@
 // yex_bouche_nez.cpp : définit le point d'entrée pour l'application console.
 
 #include "stdafx.h"
+#include "OscOutboundPacketStream.h"
+#include "IpEndpointName.h"
+#include "OscTypes.h"
+#include "UdpSocket.h"
 
 #define NB_CLSF 3 // number of classifiers
 
@@ -101,21 +105,26 @@ int main (int argc, char * const argv[]) {
 			std::vector<int> res = detect_and_draw(frame_copy);
 
 
-			if (!(prev_a.empty())) {
+			if (!(prev_a.empty()) && !(res.empty())) {
 				std::vector<float> values = process_values(prev_a, res);
-							for (unsigned int v = 0; v < res.size(); v++)
-				cout << res[v] << " ";
-			cout << "\nOutput values : " << endl;
-			for (unsigned int v = 0; v < values.size(); v++)
-			cout << values[v] << " ";
-			cout << "\n-------" << endl;
-			// transmit values to pure data
 
+				for (unsigned int v = 0; v < res.size(); v++)
+					cout << res[v] << " ";
+
+				cout << "\nOutput values : " << endl;
+
+				for (unsigned int v = 0; v < values.size(); v++)
+					cout << values[v] << " ";
+
+				// transmit values to pure data
 				p.Clear();
-				std::ostringstream tmp;
-				tmp <<values[1] << values[2];
+				std::ostringstream tmp, tmp2;
+				tmp << (int)values[0] ;
+				tmp2 <<  values[1];
 
-				p<< osc::BeginMessage("/test1") << tmp.str().c_str() <<osc::EndMessage;
+				cout << "\nmessage content : " << tmp.str().c_str() << tmp2.str().c_str() << endl;
+				cout << "\n-------" << endl;
+				p<< osc::BeginMessage("/test1") << tmp.str().c_str() << tmp2.str().c_str() <<osc::EndMessage;
 
 				transmitSocket.Send( p.Data(), p.Size() );
 
@@ -199,7 +208,7 @@ std::vector<int> detect_and_draw(IplImage* img) {
 				cascade[1],      /* the eye classifier */
 				storages[1],        /* memory buffer */
 				1.1, 30, CV_HAAR_DO_CANNY_PRUNING,     /* tune for your app */
-				cvSize(20, 20), cvSize(60, 60)  /* minimum detection scale */
+				cvSize(20, 20), cvSize(80, 80)  /* minimum detection scale */
 				);
 
 			/* draw a rectangle for each detected eye */
@@ -218,9 +227,10 @@ std::vector<int> detect_and_draw(IplImage* img) {
 				eye_area += (eye->height*eye->width);
 			}
 			/** Compute eye rectangle area : mean of sum of all eye areas **/
-			if (eyes->total == 0)
-				eyes->total = 1;
-			feat_areas.push_back((int) eye_area / eyes->total);
+			if (eyes->total > 1)
+				feat_areas.push_back((int) eye_area / eyes->total);
+			else
+				feat_areas.push_back((int) eye_area);
 
 			/* reset buffer for the next object detection */
 			cvClearMemStorage(storages[2]);
@@ -286,15 +296,29 @@ std::vector<float> process_values(std::vector<int> prev_a, std::vector<int> new_
 	std::vector<float> res;
 	res.clear();
 	float tmp = 0;
-	
-	// mouth value : mapped into [0, 1] to change volume
-	tmp = prev_a[1] / new_a[1];
-	tmp > 1 ? tmp-- : res.push_back(tmp);
+
+	// mouth value : mapped into [0; 3000] to change frequency 
+	if (new_a[1] != 0 && prev_a[1] != 0) {
+		tmp = (float)prev_a[1] / (float)new_a[1];
+		if (tmp > 1)
+			tmp--;
+	}
+	res.push_back(3000*tmp);
 	tmp = 0;
 
-	// eyes value : mapped into [0; 3000] to change frequency 
-		tmp = prev_a[0] / new_a[0];
-	tmp > 1 ? --tmp*3000 : res.push_back(tmp*3000);
+	// eyes value : mapped into [0, 1] to change volume
+	if (new_a[0] != 0 && prev_a[0] != 0) {
+		tmp = (float)prev_a[0] / (float)new_a[0];
+		if (tmp > 1)
+			tmp--;
+	}
+
+	char sz[64];
+	sprintf(sz, "%.2lf\n", tmp);
+	tmp = atof(sz);
+
+	res.push_back(tmp);
+	tmp = 0;
 
 	return res;
 }

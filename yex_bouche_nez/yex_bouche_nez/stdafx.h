@@ -11,11 +11,4 @@
 #include <highgui.h>
 #include <iostream>
 
-
-#include "OscOutboundPacketStream.h"
-#include "OscTypes.h"
-#include "IpEndpointName.h"
-#include "UdpSocket.h"
-
-
 // TODO: faites référence ici aux en-têtes supplémentaires nécessaires au programme
