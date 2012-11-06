@@ -39,15 +39,15 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\OpenCV2.4.2\build\include;C:\OpenCV2.4.2\build\include\opencv;$(IncludePath)</IncludePath>
-    <LibraryPath>Ws2_32.lib;C:\OpenCV2.4.2\build\x86\vc10\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\OpenCV_2.4.2\build\include;C:\OpenCV_2.4.2\build\include\opencv;$(IncludePath)</IncludePath>
+    <LibraryPath>Ws2_32.lib;C:\OpenCV_2.4.2\build\x86\vc10\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -79,11 +79,24 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="IpEndpointName.h" />
+    <ClInclude Include="ip\IpEndpointName.h" />
+    <ClInclude Include="ip\NetworkingUtils.h" />
+    <ClInclude Include="ip\PacketListener.h" />
+    <ClInclude Include="ip\TimerListener.h" />
+    <ClInclude Include="ip\UdpSocket.h" />
     <ClInclude Include="MessageMappingOscPacketListener.h" />
     <ClInclude Include="NetworkingUtils.h" />
     <ClInclude Include="OscException.h" />
     <ClInclude Include="OscOutboundPacketStream.h" />
     <ClInclude Include="OscTypes.h" />
+    <ClInclude Include="osc\MessageMappingOscPacketListener.h" />
+    <ClInclude Include="osc\OscException.h" />
+    <ClInclude Include="osc\OscHostEndianness.h" />
+    <ClInclude Include="osc\OscOutboundPacketStream.h" />
+    <ClInclude Include="osc\OscPacketListener.h" />
+    <ClInclude Include="osc\OscPrintReceivedElements.h" />
+    <ClInclude Include="osc\OscReceivedElements.h" />
+    <ClInclude Include="osc\OscTypes.h" />
     <ClInclude Include="PacketListener.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
@@ -98,7 +111,10 @@
     <ClCompile Include="osc\OscPrintReceivedElements.cpp" />
     <ClCompile Include="osc\OscReceivedElements.cpp" />
     <ClCompile Include="osc\OscTypes.cpp" />
-    <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="stdafx.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="yex_bouche_nez.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
