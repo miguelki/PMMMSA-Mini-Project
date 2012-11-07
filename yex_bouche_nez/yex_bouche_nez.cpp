@@ -6,7 +6,7 @@
 #include "OscTypes.h"
 #include "UdpSocket.h"
 
-#define NB_CLSF 3 // number of classifiers
+#define NB_CLSF 4 // number of classifiers
 
 // OSC stuff
 #define ADDRESS "127.0.0.1"
@@ -14,13 +14,13 @@
 #define OUTPUT_BUFFER_SIZE 1024
 
 // Create memory for calculations
-CvMemStorage* storages[NB_CLSF] = {0, 0, 0};
+CvMemStorage* storages[NB_CLSF] = {0, 0, 0, 0};
 
 // Create a new Haar classifier
-CvHaarClassifierCascade* cascade[NB_CLSF] = {0, 0, 0};
+CvHaarClassifierCascade* cascade[NB_CLSF] = {0, 0, 0, 0};
 
 // Colors for each feature : red - green - yellow
-CvScalar colors[NB_CLSF] = {CV_RGB(255, 0, 0), CV_RGB(0, 255, 0), CV_RGB(255, 255, 0)};
+CvScalar colors[NB_CLSF] = {CV_RGB(255, 0, 0), CV_RGB(0, 255, 0), CV_RGB(0, 0, 255), CV_RGB(255, 255, 0)};
 
 // Function prototype for detecting and drawing an object from an image
 std::vector<int> detect_and_draw(IplImage* img);
@@ -29,7 +29,7 @@ std::vector<int> detect_and_draw(IplImage* img);
 std::vector<float> process_values(std::vector<int> prev_a, std::vector<int> new_a);
 
 // Create a std::string that contains the cascade name
-const char *cascade_name[NB_CLSF]={"haar/face.xml", "haar/haarcascade_eye.xml", "haar/mouth.xml" };
+const char *cascade_name[NB_CLSF]={"haar/face.xml", "haar/haarcascade_lefteye_2splits.xml", "haar/haarcascade_righteye_2splits.xml", "haar/mouth.xml" };
 
 using namespace std;
 
@@ -94,16 +94,10 @@ int main (int argc, char * const argv[]) {
 				frame_copy = cvCreateImage( cvSize(frame->width,frame->height),
 				IPL_DEPTH_8U, frame->nChannels );
 
-			// Check the origin of image. If top left, copy the image frame to frame_copy. 
-			if( frame->origin == IPL_ORIGIN_TL )
-				cvCopy( frame, frame_copy, 0 );
-			// Else flip and copy the image
-			else
-				cvFlip( frame, frame_copy, 0 );
+			cvFlip( frame, frame_copy, 1 );
 
 			// vecteur avec toutes les valeurs 
 			std::vector<int> res = detect_and_draw(frame_copy);
-
 
 			if (!(prev_a.empty()) && !(res.empty())) {
 				std::vector<float> values = process_values(prev_a, res);
@@ -115,14 +109,16 @@ int main (int argc, char * const argv[]) {
 
 				for (unsigned int v = 0; v < values.size(); v++)
 					cout << values[v] << " ";
-				cout << "\n-------" << endl;
 
 				// transmit values to pure data
 				p.Clear();
-				std::ostringstream tmp;
-				tmp << (int)values[0] << values[1];
+				std::ostringstream tmp, tmp2;
+				tmp << (int)values[0] ;
+				tmp2 <<  values[1];
 
-				p<< osc::BeginMessage("/test1") << tmp.str().c_str() <<osc::EndMessage;
+				cout << "\nmessage content : " << tmp.str().c_str() << tmp2.str().c_str() << endl;
+				cout << "\n-------" << endl;
+				p<< osc::BeginMessage("/test1") << tmp.str().c_str() << tmp2.str().c_str() <<osc::EndMessage;
 
 				transmitSocket.Send( p.Data(), p.Size() );
 
@@ -153,6 +149,7 @@ std::vector<int> detect_and_draw(IplImage* img) {
 	std::vector<int> feat_areas;
 	feat_areas.clear();
 
+	int nb_eyes = 0;
 	int eye_area = 0;
 	int mth_area = 0;
 	int scale = 1;
@@ -186,52 +183,101 @@ std::vector<int> detect_and_draw(IplImage* img) {
 				cvPoint(face->x + face->width,face->y + face->height),
 				colors[0], 1, 8, 0);	
 
-			/* reset buffer for the next object detection */
+			/* reset buffers for eyes detection */
 			cvClearMemStorage(storages[1]);
+			cvClearMemStorage(storages[2]);
 
-			/* Set the Region of Interest: estimate the eyes' position */
+			/* Set the Region of Interest: estimate left eye position */
 			cvSetImageROI(
 				img,                    /* the source image */
 				cvRect(
 				face->x,            /* x = start from leftmost */
 				face->y + (int)(face->height/5.5), /* y = a few pixels from the top */
-				face->width,        /* width = same width as the face */
-				(int)face->height/3.0    /* height = 1/3 of face height */
+				(int)face->width/2.0,        /* width = half of the face */
+				(int)face->height/2.0    /* height = 1/3 of face height */
 				)
 				);
-
+			/*cvResetImageROI(img);
+			cvRectangle(
+			img,
+			cvPoint(face->x, face->y + (int)(face->height/5.5)), cvPoint(face->x + (int)face->width/2, face->y + (int)face->height/2.0),
+			colors[1],
+			1, 8, 0
+			);
+			*/
 			/* detect the eyes */
-			CvSeq *eyes = cvHaarDetectObjects(
+			CvSeq *l_eyes = cvHaarDetectObjects(
 				img,            /* the source image, with the estimated location defined */
-				cascade[1],      /* the eye classifier */
-				storages[1],        /* memory buffer */
+				cascade[2],      /* the eye classifier */
+				storages[2],        /* memory buffer */
 				1.1, 30, CV_HAAR_DO_CANNY_PRUNING,     /* tune for your app */
-				cvSize(20, 20), cvSize(60, 60)  /* minimum detection scale */
+				cvSize(20, 20), cvSize(80, 80)  /* minimum detection scale */
 				);
 
-			/* draw a rectangle for each detected eye */
-			for( int e = 0; e < (eyes ? eyes->total : 0); e++ ) {
-				/* get one eye */
-				CvRect *eye = (CvRect*)cvGetSeqElem(eyes, e);
+			/* get eyes */
+			if (l_eyes->total > 0) {
+				CvRect *l_eye = (CvRect*)cvGetSeqElem(l_eyes, 0);
+
 
 				/* draw a rectangle */
 				cvRectangle(
 					img,
-					cvPoint(eye->x, eye->y), cvPoint(eye->x + eye->width, eye->y + eye->height),
+					cvPoint(l_eye->x, l_eye->y), cvPoint(l_eye->x + l_eye->width, l_eye->y + l_eye->height),
 					colors[1],
 					1, 8, 0
 					);
 
-				eye_area += (eye->height*eye->width);
+				eye_area += (l_eye->height*l_eye->width);
+
+				nb_eyes++;
 			}
+
+			/* reset region of interest */
+			cvResetImageROI(img);
+
+			/* Set the Region of Interest: estimate left eye position */
+			cvSetImageROI(
+				img,                    /* the source image */
+				cvRect(
+				face->x + (int)(face->width/2.0), /* x = start from leftmost */
+				face->y + (int)(face->height/5.5), /* y = a few pixels from the top */
+				(int)face->width/2.0,        /* width = half of the face */
+				(int)face->height/2.0    /* height = 1/3 of face height */
+				)
+				);
+
+			CvSeq *r_eyes = cvHaarDetectObjects(
+				img,            /* the source image, with the estimated location defined */
+				cascade[1],      /* the eye classifier */
+				storages[1],        /* memory buffer */
+				1.1, 30, CV_HAAR_DO_CANNY_PRUNING,     /* tune for your app */
+				cvSize(20, 20), cvSize(80, 80)  /* minimum detection scale */
+				);
+
+			if (r_eyes->total > 0) {
+				CvRect *r_eye = (CvRect*)cvGetSeqElem(r_eyes, 0);
+
+				/* draw a rectangle */								
+				cvRectangle(
+					img,
+					cvPoint(r_eye->x, r_eye->y), cvPoint(r_eye->x + r_eye->width, r_eye->y + r_eye->height),
+					colors[2],
+					1, 8, 0
+					);
+
+				eye_area += (r_eye->height*r_eye->width);
+
+				nb_eyes++;
+			}
+
 			/** Compute eye rectangle area : mean of sum of all eye areas **/
-			if (eyes->total > 1)
-				feat_areas.push_back((int) eye_area / eyes->total);
+			if (nb_eyes >0)
+				feat_areas.push_back((int) eye_area / nb_eyes);
 			else
 				feat_areas.push_back((int) eye_area);
 
-			/* reset buffer for the next object detection */
-			cvClearMemStorage(storages[2]);
+			/* reset buffer for mouth detection */
+			cvClearMemStorage(storages[3]);
 
 			/* reset region of interest */
 			cvResetImageROI(img);
@@ -250,8 +296,8 @@ std::vector<int> detect_and_draw(IplImage* img) {
 			// detect mouth
 			CvSeq *mouths = cvHaarDetectObjects(
 				img,            /* the source image, with the estimated location defined */
-				cascade[2],      /* the eye classifier */
-				storages[2],        /* memory buffer */
+				cascade[3],      /* the eye classifier */
+				storages[3],        /* memory buffer */
 				1.1, 30, CV_HAAR_DO_CANNY_PRUNING,     /* tune for your app */
 				cvSize(20, 20), cvSize(100, 80)  /* minimum detection scale */
 				);
@@ -266,7 +312,7 @@ std::vector<int> detect_and_draw(IplImage* img) {
 					img,
 					cvPoint(mouth->x, mouth->y),
 					cvPoint(mouth->x + mouth->width, mouth->y + mouth->height),
-					colors[2],
+					colors[3],
 					1, 8, 0
 					);
 
@@ -310,6 +356,11 @@ std::vector<float> process_values(std::vector<int> prev_a, std::vector<int> new_
 		if (tmp > 1)
 			tmp--;
 	}
+
+	char sz[64];
+	sprintf(sz, "%.2lf\n", tmp);
+	tmp = atof(sz);
+
 	res.push_back(tmp);
 	tmp = 0;
 
