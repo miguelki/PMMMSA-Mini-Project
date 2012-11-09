@@ -9,8 +9,10 @@ Humans recognize facial expression without effort and delay. The challenge is to
 
 Modalities involved :
 
-- Video-based facial expression recognition
-- Sound processing
+- Video-based facial expression recognition (using OpenCV framework)
+- Sound processing (using Pure Data framework)
+
+Communication between these 2 block will be achieved using OSC (Open Sound Control)
 
 Content of the project :
 
