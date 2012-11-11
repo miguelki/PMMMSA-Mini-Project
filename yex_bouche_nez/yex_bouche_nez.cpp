@@ -38,6 +38,8 @@ int main (int argc, char * const argv[]) {
 	// OSC variables for data transmission to pure data
 	UdpTransmitSocket transmitSocket( IpEndpointName( ADDRESS, PORT ) );
 
+	DWORD start, end;
+
 	char buffer[OUTPUT_BUFFER_SIZE];
 	osc::OutboundPacketStream p( buffer, OUTPUT_BUFFER_SIZE );
 
@@ -82,6 +84,8 @@ int main (int argc, char * const argv[]) {
 		// Capture from the camera.
 		while( key != 'q' ) { 
 
+			start = GetTickCount();
+
 			// Capture the frame and load it
 			frame = cvQueryFrame( capture );
 
@@ -116,13 +120,11 @@ int main (int argc, char * const argv[]) {
 				tmp << (int)values[0] ;
 				tmp2 <<  values[1];
 
-				cout << "\nmessage content : " << tmp.str().c_str() << tmp2.str().c_str() << endl;
-				cout << "\n-------" << endl;
+				cout << "\nmessage content : " << tmp.str().c_str() << tmp2.str().c_str() << endl;				
 				p<< osc::BeginMessage("/test1") << tmp.str().c_str() << tmp2.str().c_str() <<osc::EndMessage;
 
 				transmitSocket.Send( p.Data(), p.Size() );
-
-				p.Clear();
+				p.Clear();			
 			}
 
 			prev_a = res;
@@ -130,6 +132,10 @@ int main (int argc, char * const argv[]) {
 			// Wait for a while before proceeding to the next frame
 			if( cvWaitKey( 1 ) >= 0 )
 				break;
+			end = GetTickCount();
+			unsigned long tm = end - start;
+				cout << "It took " << tm << " millisecs to process the frame" << endl;
+				cout << "-------" << endl;	
 		}
 	}
 
@@ -341,7 +347,7 @@ std::vector<float> process_values(std::vector<int> prev_a, std::vector<int> new_
 	res.clear();
 	float tmp = 0;
 
-	// mouth value : mapped into [0; 3000] to change frequency 
+	// mouth value : (prev_v + new_v)/2 
 	if (new_a[1] != 0 && prev_a[1] != 0) {
 		tmp = (float)prev_a[1] / (float)new_a[1];
 		if (tmp > 1)
@@ -350,7 +356,7 @@ std::vector<float> process_values(std::vector<int> prev_a, std::vector<int> new_
 	res.push_back(3000*tmp);
 	tmp = 0;
 
-	// eyes value : mapped into [0, 1] to change volume
+	// eyes value : offset previous value (increase or decrease) depending on the difference 
 	if (new_a[0] != 0 && prev_a[0] != 0) {
 		tmp = (float)prev_a[0] / (float)new_a[0];
 		if (tmp > 1)
