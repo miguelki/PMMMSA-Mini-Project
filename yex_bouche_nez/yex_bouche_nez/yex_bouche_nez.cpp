@@ -26,7 +26,7 @@ CvScalar colors[NB_CLSF] = {CV_RGB(255, 0, 0), CV_RGB(0, 255, 0), CV_RGB(0, 0, 2
 std::vector<int> detect_and_draw(IplImage* img);
 
 // sound processing function
-std::vector<float> process_values(std::vector<int> prev_a, std::vector<int> new_a);
+std::vector<float> process_values(std::vector<int> prev_a, std::vector<float> prev_v, std::vector<int> new_a);
 
 // Create a std::string that contains the cascade name
 const char *cascade_name[NB_CLSF]={"haar/face.xml", "haar/haarcascade_lefteye_2splits.xml", "haar/haarcascade_righteye_2splits.xml", "haar/mouth.xml" };
@@ -38,12 +38,18 @@ int main (int argc, char * const argv[]) {
 	// OSC variables for data transmission to pure data
 	UdpTransmitSocket transmitSocket( IpEndpointName( ADDRESS, PORT ) );
 
+	DWORD start, end;
+
 	char buffer[OUTPUT_BUFFER_SIZE];
 	osc::OutboundPacketStream p( buffer, OUTPUT_BUFFER_SIZE );
 
-	// Structure containing the previous areas
+	// Structures containing the previous areas and previous sent values
 	std::vector<int> prev_a;
+	std::vector<float> prev_v;
 	prev_a.clear();
+
+	prev_v.push_back(3000); // initial frequency
+	prev_v.push_back(0.5); // initial volume
 
 	// Structure for getting video from camera or avi
 	CvCapture* capture = 0;
@@ -82,6 +88,8 @@ int main (int argc, char * const argv[]) {
 		// Capture from the camera.
 		while( key != 'q' ) { 
 
+			start = GetTickCount();
+
 			// Capture the frame and load it
 			frame = cvQueryFrame( capture );
 
@@ -98,9 +106,11 @@ int main (int argc, char * const argv[]) {
 
 			// vecteur avec toutes les valeurs 
 			std::vector<int> res = detect_and_draw(frame_copy);
+			std::ostringstream tmp, tmp2;
 
 			if (!(prev_a.empty()) && !(res.empty())) {
-				std::vector<float> values = process_values(prev_a, res);
+				std::vector<float> values = process_values(prev_a, prev_v, res);
+				cout << "\nInput values : " << endl;
 
 				for (unsigned int v = 0; v < res.size(); v++)
 					cout << res[v] << " ";
@@ -110,26 +120,29 @@ int main (int argc, char * const argv[]) {
 				for (unsigned int v = 0; v < values.size(); v++)
 					cout << values[v] << " ";
 
+				prev_v = values;
 				// transmit values to pure data
 				p.Clear();
-				std::ostringstream tmp, tmp2;
-				tmp << (int)values[0] ;
-				tmp2 <<  values[1];
+			} 
 
-				cout << "\nmessage content : " << tmp.str().c_str() << tmp2.str().c_str() << endl;
-				cout << "\n-------" << endl;
-				p<< osc::BeginMessage("/test1") << tmp.str().c_str() << tmp2.str().c_str() <<osc::EndMessage;
+			tmp << prev_v[0];			
+			tmp2 << prev_v[1];
 
-				transmitSocket.Send( p.Data(), p.Size() );
+			cout << "\nmessage content : " << tmp.str().c_str() << tmp2.str().c_str() << endl;				
+			p<< osc::BeginMessage("/test1") << tmp.str().c_str() << tmp2.str().c_str() <<osc::EndMessage;
 
-				p.Clear();
-			}
+			transmitSocket.Send( p.Data(), p.Size() );
+			p.Clear();	
 
 			prev_a = res;
 
 			// Wait for a while before proceeding to the next frame
 			if( cvWaitKey( 1 ) >= 0 )
 				break;
+			end = GetTickCount();
+			unsigned long tm = end - start;
+			cout << "It took " << tm << " millisecs to process the frame" << endl;
+			cout << "-------" << endl;	
 		}
 	}
 
@@ -197,14 +210,7 @@ std::vector<int> detect_and_draw(IplImage* img) {
 				(int)face->height/2.0    /* height = 1/3 of face height */
 				)
 				);
-			/*cvResetImageROI(img);
-			cvRectangle(
-			img,
-			cvPoint(face->x, face->y + (int)(face->height/5.5)), cvPoint(face->x + (int)face->width/2, face->y + (int)face->height/2.0),
-			colors[1],
-			1, 8, 0
-			);
-			*/
+
 			/* detect the eyes */
 			CvSeq *l_eyes = cvHaarDetectObjects(
 				img,            /* the source image, with the estimated location defined */
@@ -335,27 +341,35 @@ std::vector<int> detect_and_draw(IplImage* img) {
 	return feat_areas;
 }
 
-std::vector<float> process_values(std::vector<int> prev_a, std::vector<int> new_a) {
+std::vector<float> process_values(std::vector<int> prev_a, std::vector<float> prev_v, std::vector<int> new_a) {
 
 	std::vector<float> res;
 	res.clear();
 	float tmp = 0;
 
-	// mouth value : mapped into [0; 3000] to change frequency 
+	// frequency + speed depends on mouth value : (prev_v + new_v)/2 
 	if (new_a[1] != 0 && prev_a[1] != 0) {
-		tmp = (float)prev_a[1] / (float)new_a[1];
-		if (tmp > 1)
-			tmp--;
-	}
-	res.push_back(3000*tmp);
+		tmp = ((float)prev_a[1] + (float)new_a[1])/(2*(float)new_a[1]);
+		if (tmp > 1){
+			float delta = tmp-floor(tmp);
+			tmp -= floor(tmp)*2*delta;
+		}
+		tmp *= 3000;
+	} else
+		tmp = prev_v[0];
+
+	res.push_back(tmp);
 	tmp = 0;
 
-	// eyes value : mapped into [0, 1] to change volume
+	// eyes value : offset previous value (increase or decrease) depending on the difference 
 	if (new_a[0] != 0 && prev_a[0] != 0) {
-		tmp = (float)prev_a[0] / (float)new_a[0];
+		float delta = ((float)new_a[0] - (float)prev_a[0])/(3*(float)new_a[0]);
+		tmp = prev_v[1] + delta;
+
 		if (tmp > 1)
-			tmp--;
-	}
+			tmp-= 2*delta;
+	} else
+		tmp = prev_v[1];
 
 	char sz[64];
 	sprintf(sz, "%.2lf\n", tmp);

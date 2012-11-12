@@ -10,5 +10,6 @@
 #include <cv.h>
 #include <highgui.h>
 #include <iostream>
+#include <Windows.h>
 
 // TODO: faites référence ici aux en-têtes supplémentaires nécessaires au programme
