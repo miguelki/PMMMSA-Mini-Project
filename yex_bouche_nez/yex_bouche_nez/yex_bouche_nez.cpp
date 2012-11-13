@@ -350,10 +350,7 @@ std::vector<float> process_values(std::vector<int> prev_a, std::vector<float> pr
 	// frequency + speed depends on mouth value : (prev_v + new_v)/2 
 	if (new_a[1] != 0 && prev_a[1] != 0) {
 		tmp = ((float)prev_a[1] + (float)new_a[1])/(2*(float)new_a[1]);
-		if (tmp > 1){
-			float delta = tmp-floor(tmp);
-			tmp -= floor(tmp)*2*delta;
-		}
+		tmp -= floor(tmp);
 		tmp *= 3000;
 	} else
 		tmp = prev_v[0];
@@ -363,11 +360,10 @@ std::vector<float> process_values(std::vector<int> prev_a, std::vector<float> pr
 
 	// eyes value : offset previous value (increase or decrease) depending on the difference 
 	if (new_a[0] != 0 && prev_a[0] != 0) {
-		float delta = ((float)new_a[0] - (float)prev_a[0])/(3*(float)new_a[0]);
+		float delta = ((float)new_a[0] - (float)prev_a[0])/((float)new_a[0]);
 		tmp = prev_v[1] + delta;
 
-		if (tmp > 1)
-			tmp-= 2*delta;
+		tmp -= floor(tmp);
 	} else
 		tmp = prev_v[1];
 
